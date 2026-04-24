@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Modulr - Association Rapide Fiches Récentes
 // @namespace    https://github.com/BiggerThanTheMall/classer_mail_fiche_recentes
-// @version      1.0.0
+// @version      1.1.0
 // @description  Permet d'associer rapidement un email à une fiche client en utilisant les dernières fiches consultées.
 // @author       BiggerThanTheMall
 // @match        https://courtage.modulr.fr/fr/scripts/emails/emails_view.php*
+// @match        https://courtage.modulr.fr/fr/scripts/emails/emails_list.php
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=modulr.fr
 // @grant        none
 // @run-at       document-end
