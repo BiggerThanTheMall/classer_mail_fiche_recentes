@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Modulr - Association Rapide Fiches Récentes
 // @namespace    https://github.com/BiggerThanTheMall/classer_mail_fiche_recentes
-// @version      1.1.2
+// @version      1.1.3
 // @description  Permet d'associer rapidement un email à une fiche client en utilisant les dernières fiches consultées.
 // @author       BiggerThanTheMall
 // @match        https://courtage.modulr.fr/fr/scripts/emails/emails_view.php*
@@ -31,15 +31,6 @@
         return ids.length === 1 && /^[1-9][0-9]*$/.test(ids[0]) ? ids[0] : null;
     }
 
-    function historyMenu(trigger) {
-        if (!trigger) return null;
-        for (const id of (trigger.getAttribute('aria-describedby') || '').split(/\s+/)) {
-            const menu = document.getElementById(id)?.querySelector('.tooltip_menu_list');
-            if (menu) return menu;
-        }
-        return null;
-    }
-
     function fetchAndInject() {
         const popup = document.querySelector('#pop_up');
         if (!popup) return;
@@ -52,29 +43,7 @@
             existingContainer?.remove();
             return;
         }
-        if (existingContainer?.dataset.ready) return;
-        const trigger = document.querySelector('a.tooltip_browsing_history_list');
-        if (existingContainer) {
-            const menu = historyMenu(trigger);
-            if (menu) {
-                fillClientList(existingContainer, menu, popup);
-                if (existingContainer.dataset.opened && !trigger.matches(':hover') && !menu.matches(':hover')) {
-                    trigger.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
-                }
-            } else if (Date.now() - Number(existingContainer.dataset.started) > 6000 && !existingContainer.querySelector('button')) {
-                const status = existingContainer.querySelector('li');
-                status.textContent = 'Survole « Dernières fiches consultées » dans Modulr ou ';
-                const retry = document.createElement('button');
-                retry.type = 'button';
-                retry.textContent = 'Réessayer';
-                retry.onclick = () => {
-                    existingContainer.remove();
-                    fetchAndInject();
-                };
-                status.append(retry);
-            }
-            return;
-        }
+        if (existingContainer) return;
 
         const container = document.createElement('div');
         container.id = "recent-entities-container";
@@ -90,13 +59,38 @@
         `;
 
         popup.prepend(container);
-        container.dataset.started = String(Date.now());
-        const menu = historyMenu(trigger);
-        if (menu) {
+        loadRecentClients(container, popup);
+    }
+
+    async function loadRecentClients(container, popup) {
+        const status = container.querySelector('li');
+        status.textContent = 'Chargement…';
+        try {
+            const token = document.querySelector('meta[name="mcut"]')?.content;
+            if (token === undefined) throw new Error('Recharge la page Modulr pour actualiser la session.');
+            const response = await fetch('/fr/intranet/history', {
+                method: 'POST',
+                mode: 'same-origin',
+                credentials: 'same-origin',
+                redirect: 'error',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: new URLSearchParams({ mcut: token })
+            });
+            if (!response.ok) throw new Error('Modulr a répondu HTTP ' + response.status + '.');
+            const template = document.createElement('template');
+            template.innerHTML = await response.text();
+            if (!container.isConnected) return;
+            const menu = template.content.querySelector('.tooltip_menu_list');
+            if (!menu) throw new Error('Le contenu de l’historique est indisponible.');
             fillClientList(container, menu, popup);
-        } else if (trigger) {
-            container.dataset.opened = '1';
-            trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, view: window }));
+        } catch (error) {
+            if (!container.isConnected) return;
+            status.textContent = 'Historique indisponible. ' + error.message + ' ';
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.textContent = 'Réessayer';
+            retry.onclick = () => loadRecentClients(container, popup);
+            status.append(retry);
         }
     }
 
@@ -110,7 +104,7 @@
             if (!id || !label || seen.has(id)) continue;
 
             const li = document.createElement('li');
-            li.className = (seen.size % 2 === 0 ? 'even' : 'odd') + ' email_association_line recent-item-js';
+            li.className = (seen.size % 2 === 0 ? 'even' : 'odd') + ' recent-item-js';
             seen.add(id);
             li.style.cursor = 'pointer';
             const row = document.createElement('div');
@@ -137,8 +131,8 @@
         }
         if (seen.size) status.remove();
         else status.textContent = 'Aucune fiche client dans l’historique récent.';
-        container.dataset.ready = '1';
     }
 
-    setInterval(fetchAndInject, 800);
+    new MutationObserver(fetchAndInject).observe(document.body, { childList: true, subtree: true });
+    fetchAndInject();
 })();
