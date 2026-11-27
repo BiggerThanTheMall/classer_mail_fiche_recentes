@@ -7,7 +7,7 @@ Liens publics vérifiés sans connexion GitHub le 4 novembre 2026. Partager le l
 
 | Fichier | Version | Installation / `@downloadURL` | `@updateURL` |
 |---|---|---|---|
-| `Modulr-Association-Rapide.user.js` | 1.1.0 | [Installer](https://raw.githubusercontent.com/BiggerThanTheMall/classer_mail_fiche_recentes/main/Modulr-Association-Rapide.user.js) | [Vérifier la version](https://raw.githubusercontent.com/BiggerThanTheMall/classer_mail_fiche_recentes/main/Modulr-Association-Rapide.user.js) |
+| `Modulr-Association-Rapide.user.js` | 1.1.1 | [Installer](https://raw.githubusercontent.com/BiggerThanTheMall/classer_mail_fiche_recentes/main/Modulr-Association-Rapide.user.js) | [Vérifier la version](https://raw.githubusercontent.com/BiggerThanTheMall/classer_mail_fiche_recentes/main/Modulr-Association-Rapide.user.js) |
 
 ### Si le lien affiche du code au lieu d'ouvrir l'installation
 
