@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Modulr - Association Rapide Fiches Récentes
 // @namespace    https://github.com/BiggerThanTheMall/classer_mail_fiche_recentes
-// @version      1.1.1
+// @version      1.1.2
 // @description  Permet d'associer rapidement un email à une fiche client en utilisant les dernières fiches consultées.
 // @author       BiggerThanTheMall
 // @match        https://courtage.modulr.fr/fr/scripts/emails/emails_view.php*
@@ -31,7 +31,16 @@
         return ids.length === 1 && /^[1-9][0-9]*$/.test(ids[0]) ? ids[0] : null;
     }
 
-    async function fetchAndInject() {
+    function historyMenu(trigger) {
+        if (!trigger) return null;
+        for (const id of (trigger.getAttribute('aria-describedby') || '').split(/\s+/)) {
+            const menu = document.getElementById(id)?.querySelector('.tooltip_menu_list');
+            if (menu) return menu;
+        }
+        return null;
+    }
+
+    function fetchAndInject() {
         const popup = document.querySelector('#pop_up');
         if (!popup) return;
 
@@ -43,7 +52,29 @@
             existingContainer?.remove();
             return;
         }
-        if (existingContainer) return;
+        if (existingContainer?.dataset.ready) return;
+        const trigger = document.querySelector('a.tooltip_browsing_history_list');
+        if (existingContainer) {
+            const menu = historyMenu(trigger);
+            if (menu) {
+                fillClientList(existingContainer, menu, popup);
+                if (existingContainer.dataset.opened && !trigger.matches(':hover') && !menu.matches(':hover')) {
+                    trigger.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
+                }
+            } else if (Date.now() - Number(existingContainer.dataset.started) > 6000 && !existingContainer.querySelector('button')) {
+                const status = existingContainer.querySelector('li');
+                status.textContent = 'Survole « Dernières fiches consultées » dans Modulr ou ';
+                const retry = document.createElement('button');
+                retry.type = 'button';
+                retry.textContent = 'Réessayer';
+                retry.onclick = () => {
+                    existingContainer.remove();
+                    fetchAndInject();
+                };
+                status.append(retry);
+            }
+            return;
+        }
 
         const container = document.createElement('div');
         container.id = "recent-entities-container";
@@ -59,57 +90,55 @@
         `;
 
         popup.prepend(container);
-        const list = container.querySelector('#recent-entities-list');
-        const status = list.firstElementChild;
-
-        try {
-            const response = await fetch("https://courtage.modulr.fr/fr/intranet/history", {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
-                body: "mcut="
-            });
-            if (!response.ok) throw new Error('HTTP ' + response.status);
-            const history = new DOMParser().parseFromString(await response.text(), 'text/html');
-            const seen = new Set();
-            for (const link of history.querySelectorAll('a[href]')) {
-                const id = getClientId(link.getAttribute('href'), response.url);
-                const label = link.textContent.trim().replace(/×$/, '').trim();
-                if (!id || !label || seen.has(id)) continue;
-
-                const li = document.createElement('li');
-                li.className = (seen.size % 2 === 0 ? 'even' : 'odd') + ' email_association_line recent-item-js';
-                seen.add(id);
-                li.style.cursor = 'pointer';
-                const row = document.createElement('div');
-                row.className = 'block medium_padding';
-                const icon = document.createElement('span');
-                icon.className = 'fa fa-user low_padding_right';
-                row.append(icon, ' ' + label);
-                li.append(row);
-
-                li.onclick = function() {
-                    list.querySelectorAll('.recent-item-js').forEach(el => el.style.background = '');
-                    li.style.background = '#e1f5fe';
-                    const currentId = popup.querySelector('#email_association_entity_id');
-                    const currentType = popup.querySelector('#email_association_entity_name');
-                    const currentLabel = popup.querySelector('#email_association_entity');
-                    if (!currentId || !currentType || !currentLabel) return;
-                    currentId.value = id;
-                    currentType.value = 'client';
-                    currentLabel.value = label;
-                    currentId.classList.add('id_selected');
-                    currentId.dispatchEvent(new Event('change', { bubbles: true }));
-                };
-                list.append(li);
-            }
-            if (seen.size) status.remove();
-            else status.textContent = 'Aucune fiche client dans l’historique récent.';
-        } catch (e) {
-            status.textContent = 'Impossible de charger les fiches clients récentes.';
-            console.error("Erreur script récent:", e);
+        container.dataset.started = String(Date.now());
+        const menu = historyMenu(trigger);
+        if (menu) {
+            fillClientList(container, menu, popup);
+        } else if (trigger) {
+            container.dataset.opened = '1';
+            trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, view: window }));
         }
     }
 
-    // Intervalle de vérification (on garde 800ms pour la réactivité)
+    function fillClientList(container, menu, popup) {
+        const list = container.querySelector('#recent-entities-list');
+        const status = list.firstElementChild;
+        const seen = new Set();
+        for (const link of menu.querySelectorAll('li a[href]')) {
+            const id = getClientId(link.getAttribute('href'), document.baseURI);
+            const label = link.textContent.trim().replace(/×$/, '').trim();
+            if (!id || !label || seen.has(id)) continue;
+
+            const li = document.createElement('li');
+            li.className = (seen.size % 2 === 0 ? 'even' : 'odd') + ' email_association_line recent-item-js';
+            seen.add(id);
+            li.style.cursor = 'pointer';
+            const row = document.createElement('div');
+            row.className = 'block medium_padding';
+            const icon = document.createElement('span');
+            icon.className = 'fa fa-user low_padding_right';
+            row.append(icon, ' ' + label);
+            li.append(row);
+
+            li.onclick = function() {
+                list.querySelectorAll('.recent-item-js').forEach(el => el.style.background = '');
+                li.style.background = '#e1f5fe';
+                const currentId = popup.querySelector('#email_association_entity_id');
+                const currentType = popup.querySelector('#email_association_entity_name');
+                const currentLabel = popup.querySelector('#email_association_entity');
+                if (!currentId || !currentType || !currentLabel) return;
+                currentId.value = id;
+                currentType.value = 'client';
+                currentLabel.value = label;
+                currentId.classList.add('id_selected');
+                currentId.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            list.append(li);
+        }
+        if (seen.size) status.remove();
+        else status.textContent = 'Aucune fiche client dans l’historique récent.';
+        container.dataset.ready = '1';
+    }
+
     setInterval(fetchAndInject, 800);
 })();
